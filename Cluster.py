@@ -11,7 +11,7 @@ st.set_page_config(page_title="Análisis de Consumo Eléctrico - K-means")
 
 def load_data(file):
     # Cargar el archivo CSV
-    df = pd.read_csv(file)
+    df = pd.read_csv(file, index_col=0)  # Usar la primera columna como índice
     
     # Mostrar información sobre las columnas disponibles
     st.write("Columnas disponibles en el archivo:", df.columns.tolist())
@@ -26,10 +26,13 @@ def load_data(file):
         st.error(f"Error al procesar la columna Datetime: {str(e)}")
         return None
     
-    # Verificar si existe la columna kwh
-    if 'kwh' not in df.columns:
-        st.error("No se encontró la columna 'kwh' en el archivo")
+    # Verificar si existe la columna Kwh
+    if 'Kwh' not in df.columns:
+        st.error("No se encontró la columna 'Kwh' en el archivo")
         return None
+    
+    # Eliminar filas con valores faltantes
+    df = df.dropna()
     
     return df
 
@@ -40,7 +43,7 @@ def prepare_data(df):
         df['dayofweek'] = df['Datetime'].dt.dayofweek
         
         # Preparar datos para clustering
-        X = df[['kwh', 'hour', 'dayofweek']].copy()
+        X = df[['Kwh', 'hour', 'dayofweek']].copy()
         
         # Escalar los datos
         scaler = StandardScaler()
@@ -96,7 +99,7 @@ if uploaded_file is not None:
                 # Mostrar información de clusters
                 st.header("📑 Resumen de Clusters")
                 cluster_summary = df.groupby('Cluster').agg({
-                    'kwh': ['mean', 'min', 'max', 'count']
+                    'Kwh': ['mean', 'min', 'max', 'count']
                 }).round(2)
                 
                 cluster_summary.columns = ['Consumo Promedio (kWh)', 'Consumo Mínimo (kWh)', 
@@ -114,9 +117,9 @@ if uploaded_file is not None:
                         st.subheader("Dispersión por Hora del Día")
                         scatter_chart = alt.Chart(df).mark_circle().encode(
                             x=alt.X('hour:Q', title='Hora del Día'),
-                            y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                            y=alt.Y('Kwh:Q', title='Consumo (kWh)'),
                             color=alt.Color('Cluster:N', title='Cluster'),
-                            tooltip=['hour', 'kwh', 'Cluster']
+                            tooltip=['hour', 'Kwh', 'Cluster']
                         ).properties(
                             width=300,
                             height=300
@@ -127,10 +130,16 @@ if uploaded_file is not None:
                     with col2:
                         st.subheader("Consumo por Día de la Semana")
                         weekday_chart = alt.Chart(df).mark_circle().encode(
-                            x=alt.X('dayofweek:Q', title='Día de la Semana (0=Lunes)'),
-                            y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                            x=alt.X('dayofweek:Q', 
+                                   title='Día de la Semana',
+                                   scale=alt.Scale(domain=[0, 6]),
+                                   axis=alt.Axis(
+                                       values=[0, 1, 2, 3, 4, 5, 6],
+                                       labelExpr="['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][datum.value]"
+                                   )),
+                            y=alt.Y('Kwh:Q', title='Consumo (kWh)'),
                             color=alt.Color('Cluster:N', title='Cluster'),
-                            tooltip=['dayofweek', 'kwh', 'Cluster']
+                            tooltip=['dayofweek', 'Kwh', 'Cluster']
                         ).properties(
                             width=300,
                             height=300
@@ -142,9 +151,9 @@ if uploaded_file is not None:
                     st.subheader("Consumo a lo Largo del Tiempo por Cluster")
                     line_chart = alt.Chart(df).mark_line(point=True).encode(
                         x=alt.X('Datetime:T', title='Fecha y Hora'),
-                        y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                        y=alt.Y('Kwh:Q', title='Consumo (kWh)'),
                         color=alt.Color('Cluster:N', title='Cluster'),
-                        tooltip=['Datetime', 'kwh', 'Cluster']
+                        tooltip=['Datetime', 'Kwh', 'Cluster']
                     ).properties(
                         width=800,
                         height=400
@@ -156,7 +165,7 @@ if uploaded_file is not None:
                     st.header("📊 Estadísticas por Cluster")
                     box_plot = alt.Chart(df).mark_boxplot().encode(
                         x=alt.X('Cluster:N', title='Cluster'),
-                        y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                        y=alt.Y('Kwh:Q', title='Consumo (kWh)'),
                         color=alt.Color('Cluster:N', title='Cluster')
                     ).properties(
                         width=600,
@@ -170,7 +179,7 @@ if uploaded_file is not None:
                 
                 # Descargar resultados
                 st.header("💾 Descargar Resultados")
-                csv = df.to_csv(index=False)
+                csv = df.to_csv(index=True)
                 st.download_button(
                     label="Descargar resultados como CSV",
                     data=csv,
@@ -182,13 +191,13 @@ else:
     st.markdown("""
     El archivo CSV debe contener las siguientes columnas:
     - `Datetime`: Fecha y hora de la medición
-    - `kwh`: Consumo eléctrico en kilovatios-hora
+    - `Kwh`: Consumo eléctrico en kilovatios-hora
     
     Formato esperado:
     ```
-    Datetime,kwh
-    2024-01-01 00:00:00,10.5
-    2024-01-01 01:00:00,11.2
+    ,Datetime,Kwh
+    0,2024-11-01 00:00:00,0.14625
+    1,2024-11-01 01:00:00,0.12281
     ...
     ```
     """)
