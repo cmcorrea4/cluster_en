@@ -13,34 +13,57 @@ def load_data(file):
     # Cargar el archivo CSV
     df = pd.read_csv(file)
     
+    # Mostrar información sobre las columnas disponibles
+    st.write("Columnas disponibles en el archivo:", df.columns.tolist())
+    
     # Convertir la columna Datetime a datetime si es necesario
     try:
         df['Datetime'] = pd.to_datetime(df['Datetime'])
-    except:
-        st.error("Asegúrate que la columna de tiempo se llame 'Datetime'")
+    except KeyError:
+        st.error("No se encontró la columna 'Datetime' en el archivo")
+        return None
+    except Exception as e:
+        st.error(f"Error al procesar la columna Datetime: {str(e)}")
+        return None
+    
+    # Verificar si existe la columna kwh
+    if 'kwh' not in df.columns:
+        st.error("No se encontró la columna 'kwh' en el archivo")
         return None
     
     return df
 
 def prepare_data(df):
-    # Extraer características temporales
-    df['hour'] = df['Datetime'].dt.hour
-    df['dayofweek'] = df['Datetime'].dt.dayofweek
-    
-    # Preparar datos para clustering
-    X = df[['kwh', 'hour', 'dayofweek']].copy()
-    
-    # Escalar los datos
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    return X_scaled, X
+    try:
+        # Extraer características temporales
+        df['hour'] = df['Datetime'].dt.hour
+        df['dayofweek'] = df['Datetime'].dt.dayofweek
+        
+        # Preparar datos para clustering
+        X = df[['kwh', 'hour', 'dayofweek']].copy()
+        
+        # Escalar los datos
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+        
+        return X_scaled, X
+    except Exception as e:
+        st.error(f"Error al preparar los datos: {str(e)}")
+        st.write("Estructura actual del DataFrame:")
+        st.write(df.head())
+        st.write("Tipos de datos de las columnas:")
+        st.write(df.dtypes)
+        return None, None
 
 def perform_clustering(X_scaled, n_clusters):
-    # Aplicar K-means
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    clusters = kmeans.fit_predict(X_scaled)
-    return clusters
+    try:
+        # Aplicar K-means
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        clusters = kmeans.fit_predict(X_scaled)
+        return clusters
+    except Exception as e:
+        st.error(f"Error al realizar el clustering: {str(e)}")
+        return None
 
 # Título de la aplicación
 st.title("📊 Análisis de Consumo Eléctrico con K-means")
@@ -55,100 +78,105 @@ if uploaded_file is not None:
     df = load_data(uploaded_file)
     
     if df is not None:
+        # Mostrar las primeras filas de los datos
+        st.subheader("Vista previa de los datos")
+        st.write(df.head())
+        
         # Preparar datos para clustering
         X_scaled, X = prepare_data(df)
         
-        # Realizar clustering
-        clusters = perform_clustering(X_scaled, n_clusters)
-        
-        # Añadir clusters al dataframe original
-        df['Cluster'] = clusters.astype(str)  # Convertir a string para mejor visualización
-        
-        # Mostrar información de clusters
-        st.header("📑 Resumen de Clusters")
-        cluster_summary = df.groupby('Cluster').agg({
-            'kwh': ['mean', 'min', 'max', 'count']
-        }).round(2)
-        
-        cluster_summary.columns = ['Consumo Promedio (kWh)', 'Consumo Mínimo (kWh)', 
-                                 'Consumo Máximo (kWh)', 'Número de Registros']
-        st.dataframe(cluster_summary)
-        
-        # Visualización de clusters
-        st.header("📈 Visualización de Clusters")
-        
-        # Crear dos columnas para los gráficos
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Dispersión por Hora del Día")
-            # Gráfico de dispersión usando Altair
-            scatter_chart = alt.Chart(df).mark_circle().encode(
-                x=alt.X('hour:Q', title='Hora del Día'),
-                y=alt.Y('kwh:Q', title='Consumo (kWh)'),
-                color=alt.Color('Cluster:N', title='Cluster'),
-                tooltip=['hour', 'kwh', 'Cluster']
-            ).properties(
-                width=300,
-                height=300
-            ).interactive()
+        if X_scaled is not None and X is not None:
+            # Realizar clustering
+            clusters = perform_clustering(X_scaled, n_clusters)
             
-            st.altair_chart(scatter_chart, use_container_width=True)
-        
-        with col2:
-            st.subheader("Consumo por Día de la Semana")
-            # Gráfico de dispersión por día de la semana
-            weekday_chart = alt.Chart(df).mark_circle().encode(
-                x=alt.X('dayofweek:Q', title='Día de la Semana (0=Lunes)'),
-                y=alt.Y('kwh:Q', title='Consumo (kWh)'),
-                color=alt.Color('Cluster:N', title='Cluster'),
-                tooltip=['dayofweek', 'kwh', 'Cluster']
-            ).properties(
-                width=300,
-                height=300
-            ).interactive()
-            
-            st.altair_chart(weekday_chart, use_container_width=True)
-        
-        # Gráfico de línea temporal
-        st.subheader("Consumo a lo Largo del Tiempo por Cluster")
-        line_chart = alt.Chart(df).mark_line(point=True).encode(
-            x=alt.X('Datetime:T', title='Fecha y Hora'),
-            y=alt.Y('kwh:Q', title='Consumo (kWh)'),
-            color=alt.Color('Cluster:N', title='Cluster'),
-            tooltip=['Datetime', 'kwh', 'Cluster']
-        ).properties(
-            width=800,
-            height=400
-        ).interactive()
-        
-        st.altair_chart(line_chart, use_container_width=True)
-        
-        # Mostrar estadísticas básicas
-        st.header("📊 Estadísticas por Cluster")
-        
-        # Crear gráfico de caja usando Altair
-        box_plot = alt.Chart(df).mark_boxplot().encode(
-            x=alt.X('Cluster:N', title='Cluster'),
-            y=alt.Y('kwh:Q', title='Consumo (kWh)'),
-            color=alt.Color('Cluster:N', title='Cluster')
-        ).properties(
-            width=600,
-            height=400
-        )
-        
-        st.altair_chart(box_plot, use_container_width=True)
-        
-        # Descargar resultados
-        st.header("💾 Descargar Resultados")
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label="Descargar resultados como CSV",
-            data=csv,
-            file_name="resultados_clustering.csv",
-            mime="text/csv"
-        )
-        
+            if clusters is not None:
+                # Añadir clusters al dataframe original
+                df['Cluster'] = clusters.astype(str)
+                
+                # Mostrar información de clusters
+                st.header("📑 Resumen de Clusters")
+                cluster_summary = df.groupby('Cluster').agg({
+                    'kwh': ['mean', 'min', 'max', 'count']
+                }).round(2)
+                
+                cluster_summary.columns = ['Consumo Promedio (kWh)', 'Consumo Mínimo (kWh)', 
+                                         'Consumo Máximo (kWh)', 'Número de Registros']
+                st.dataframe(cluster_summary)
+                
+                # Visualización de clusters
+                st.header("📈 Visualización de Clusters")
+                
+                try:
+                    # Crear dos columnas para los gráficos
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.subheader("Dispersión por Hora del Día")
+                        scatter_chart = alt.Chart(df).mark_circle().encode(
+                            x=alt.X('hour:Q', title='Hora del Día'),
+                            y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                            color=alt.Color('Cluster:N', title='Cluster'),
+                            tooltip=['hour', 'kwh', 'Cluster']
+                        ).properties(
+                            width=300,
+                            height=300
+                        ).interactive()
+                        
+                        st.altair_chart(scatter_chart, use_container_width=True)
+                    
+                    with col2:
+                        st.subheader("Consumo por Día de la Semana")
+                        weekday_chart = alt.Chart(df).mark_circle().encode(
+                            x=alt.X('dayofweek:Q', title='Día de la Semana (0=Lunes)'),
+                            y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                            color=alt.Color('Cluster:N', title='Cluster'),
+                            tooltip=['dayofweek', 'kwh', 'Cluster']
+                        ).properties(
+                            width=300,
+                            height=300
+                        ).interactive()
+                        
+                        st.altair_chart(weekday_chart, use_container_width=True)
+                    
+                    # Gráfico de línea temporal
+                    st.subheader("Consumo a lo Largo del Tiempo por Cluster")
+                    line_chart = alt.Chart(df).mark_line(point=True).encode(
+                        x=alt.X('Datetime:T', title='Fecha y Hora'),
+                        y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                        color=alt.Color('Cluster:N', title='Cluster'),
+                        tooltip=['Datetime', 'kwh', 'Cluster']
+                    ).properties(
+                        width=800,
+                        height=400
+                    ).interactive()
+                    
+                    st.altair_chart(line_chart, use_container_width=True)
+                    
+                    # Gráfico de caja
+                    st.header("📊 Estadísticas por Cluster")
+                    box_plot = alt.Chart(df).mark_boxplot().encode(
+                        x=alt.X('Cluster:N', title='Cluster'),
+                        y=alt.Y('kwh:Q', title='Consumo (kWh)'),
+                        color=alt.Color('Cluster:N', title='Cluster')
+                    ).properties(
+                        width=600,
+                        height=400
+                    )
+                    
+                    st.altair_chart(box_plot, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Error al crear las visualizaciones: {str(e)}")
+                
+                # Descargar resultados
+                st.header("💾 Descargar Resultados")
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="Descargar resultados como CSV",
+                    data=csv,
+                    file_name="resultados_clustering.csv",
+                    mime="text/csv"
+                )
 else:
     st.info("👆 Por favor, carga un archivo CSV para comenzar el análisis.")
     st.markdown("""
@@ -156,7 +184,13 @@ else:
     - `Datetime`: Fecha y hora de la medición
     - `kwh`: Consumo eléctrico en kilovatios-hora
     
-    Los datos serán procesados y clasificados automáticamente usando el algoritmo K-means.
+    Formato esperado:
+    ```
+    Datetime,kwh
+    2024-01-01 00:00:00,10.5
+    2024-01-01 01:00:00,11.2
+    ...
+    ```
     """)
 
 # Agregar información sobre el uso
