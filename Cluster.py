@@ -15,7 +15,7 @@ def load_data(file):
     
     # Convertir la columna timestamp a datetime si es necesario
     try:
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['Datetime'] = pd.to_datetime(df['Datetime'])
     except:
         st.error("Asegúrate que la columna de tiempo se llame 'timestamp'")
         return None
