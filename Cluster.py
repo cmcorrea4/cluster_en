@@ -13,19 +13,19 @@ def load_data(file):
     # Cargar el archivo CSV
     df = pd.read_csv(file)
     
-    # Convertir la columna timestamp a datetime si es necesario
+    # Convertir la columna Datetime a datetime si es necesario
     try:
         df['Datetime'] = pd.to_datetime(df['Datetime'])
     except:
-        st.error("Asegúrate que la columna de tiempo se llame 'timestamp'")
+        st.error("Asegúrate que la columna de tiempo se llame 'Datetime'")
         return None
     
     return df
 
 def prepare_data(df):
     # Extraer características temporales
-    df['hour'] = df['timestamp'].dt.hour
-    df['dayofweek'] = df['timestamp'].dt.dayofweek
+    df['hour'] = df['Datetime'].dt.hour
+    df['dayofweek'] = df['Datetime'].dt.dayofweek
     
     # Preparar datos para clustering
     X = df[['kwh', 'hour', 'dayofweek']].copy()
@@ -113,10 +113,10 @@ if uploaded_file is not None:
         # Gráfico de línea temporal
         st.subheader("Consumo a lo Largo del Tiempo por Cluster")
         line_chart = alt.Chart(df).mark_line(point=True).encode(
-            x=alt.X('timestamp:T', title='Fecha y Hora'),
+            x=alt.X('Datetime:T', title='Fecha y Hora'),
             y=alt.Y('kwh:Q', title='Consumo (kWh)'),
             color=alt.Color('Cluster:N', title='Cluster'),
-            tooltip=['timestamp', 'kwh', 'Cluster']
+            tooltip=['Datetime', 'kwh', 'Cluster']
         ).properties(
             width=800,
             height=400
@@ -153,7 +153,7 @@ else:
     st.info("👆 Por favor, carga un archivo CSV para comenzar el análisis.")
     st.markdown("""
     El archivo CSV debe contener las siguientes columnas:
-    - `timestamp`: Fecha y hora de la medición
+    - `Datetime`: Fecha y hora de la medición
     - `kwh`: Consumo eléctrico en kilovatios-hora
     
     Los datos serán procesados y clasificados automáticamente usando el algoritmo K-means.
